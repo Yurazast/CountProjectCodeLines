@@ -20,21 +20,19 @@ void Timer::Reset()
 	m_start_time_point = m_end_time_point = {};
 }
 
-std::ostream& operator<<(std::ostream& os, Timer& timer)
+std::ostream& operator<<(std::ostream& os, const Timer& m_timer)
 {
-	if (timer.m_start_time_point.time_since_epoch().count() == 0)
+	if (m_timer.m_start_time_point.time_since_epoch().count() == 0)
 	{
 		os << "Timer was not started" << std::endl;
 		return os;
 	}
 
-	if (timer.m_end_time_point.time_since_epoch().count() == 0)
+	if (m_timer.m_end_time_point.time_since_epoch().count() == 0)
 	{
-		timer.Stop();
+		const_cast<Timer&>(m_timer).Stop();
 	}
 
-	os.imbue(std::locale(""));
-	os << "Execution time: " << std::chrono::duration_cast<std::chrono::microseconds>
-		(timer.m_end_time_point - timer.m_start_time_point).count() << " microseconds" << std::endl;
+	os << std::chrono::duration_cast<std::chrono::milliseconds> (m_timer.m_end_time_point - m_timer.m_start_time_point).count();
 	return os;
 }

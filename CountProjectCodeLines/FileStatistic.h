@@ -6,9 +6,11 @@ class FileStatistic
 {
 public:
 	FileStatistic();
+	FileStatistic(const std::string& file_name);
 
 	void Reset();
 
+	std::string get_filename() const;
 	std::size_t get_blank_lines_count() const;
 	std::size_t get_comment_lines_count() const;
 	std::size_t get_code_lines_count() const;
@@ -23,6 +25,7 @@ public:
 private:
 	friend std::ostream& operator<<(std::ostream& os, const FileStatistic& file_statistic);	
 
+	std::string m_filename;
 	std::size_t m_blank_lines_count;
 	std::size_t m_comment_lines_count;
 	std::size_t m_code_lines_count;

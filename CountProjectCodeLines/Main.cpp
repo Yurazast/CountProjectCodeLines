@@ -1,7 +1,6 @@
 #include <iostream>
 
 #include "ProjectAnalyzer.h"
-#include "Timer.h"
 
 int main()
 {
@@ -12,13 +11,9 @@ int main()
 		std::cin >> project_root_dir;
 		std::cout << std::endl;
 
-		Timer timer;
-		timer.Start();
 		ProjectAnalyzer project_analyzer(project_root_dir);
 		project_analyzer.Analyze();
 		std::cout << project_analyzer;
-		timer.Stop();
-		std::cout << timer;
 
 		std::cout << "\nEnter absolute path to output file: ";
 		std::string output_filename;
@@ -29,7 +24,6 @@ int main()
 			throw std::runtime_error("Cannot open file: \"" + output_filename + "\"");
 			
 		output_file << project_analyzer;
-		output_file << timer;
 		output_file.close();
 	}
 	catch (const std::exception& e)

@@ -6,36 +6,57 @@ const std::string ProjectAnalyzer::FILE_EXTENSION_NAMES[] {
 
 ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
 		: m_project_root_dir(project_root_dir)
-		, m_thread_pool(std::thread::hardware_concurrency())
+		, m_project_filenames{}
+		, m_file_analyzers(std::thread::hardware_concurrency())
+		, m_futures(std::thread::hardware_concurrency())
+		, m_statistics_of_files{}
+		, m_total_files_statistic()
 		, m_total_files_processed(0)
+		, m_mutex()
+		, m_cond_var()
+		, m_timer()
 {
 	if (!std::filesystem::exists(m_project_root_dir))
 		throw std::runtime_error("Directory \"" + project_root_dir + "\" doesn't exist");
+
+	for (std::size_t i = 0; i < m_futures.size(); ++i)
+	{
+		m_file_analyzers[i] = new FileAnalyzer(m_project_filenames, m_mutex, m_cond_var);
+	}
+
+	for (std::size_t i = 0; i < m_futures.size(); ++i)
+	{
+		m_futures[i] = std::async(&FileAnalyzer::Analyze, m_file_analyzers[i]);
+	}
 }
 
 ProjectAnalyzer::~ProjectAnalyzer()
 {
+	for (const FileAnalyzer* file_analyzer : m_file_analyzers)
+		delete file_analyzer;
 }
 
 void ProjectAnalyzer::Analyze()
 {
+	m_timer.Start();
 	SearchFiles();
 	ProcessFiles();
+	m_timer.Stop();
 }
 
-std::size_t ProjectAnalyzer::get_total_files_processed() const
+std::forward_list<FileStatistic> ProjectAnalyzer::get_statistics_of_files() const
 {
-	return m_total_files_processed;
-}
-
-std::vector<FileStatistic> ProjectAnalyzer::get_files_statistics() const
-{
-	return m_files_statistics;
+	return m_statistics_of_files;
 }
 
 FileStatistic ProjectAnalyzer::get_total_files_statistic() const
 {
 	return m_total_files_statistic;
+}
+
+std::size_t ProjectAnalyzer::get_total_files_processed() const
+{
+	return m_total_files_processed;
 }
 
 void ProjectAnalyzer::SearchFiles()
@@ -49,7 +70,11 @@ void ProjectAnalyzer::SearchFiles()
 			{
 				if (file_ext == ext_name)
 				{
-					m_project_filenames.push(dir_entry.path().string());
+					std::unique_lock<std::mutex> lock(m_mutex);
+					m_project_filenames.emplace(dir_entry.path().string());
+					lock.unlock();
+
+					m_cond_var.notify_one();
 					break;
 				}
 			}
@@ -59,54 +84,52 @@ void ProjectAnalyzer::SearchFiles()
 
 void ProjectAnalyzer::ProcessFiles()
 {
-	std::mutex mutex;
-	std::condition_variable cond_var;
-
 	while (!m_project_filenames.empty())
 	{
-		for (std::size_t i = 0; i < m_thread_pool.size(); ++i)
+		for (std::size_t i = 0; i < m_futures.size(); ++i)
 		{
-			std::unique_lock<std::mutex> lock(mutex);
+			GetFileStatisticInFuture(i);
 
-			FileAnalyzer file_analyzer(m_project_filenames.front(), mutex, cond_var);
-			m_project_filenames.pop();
-			m_thread_pool[i] = std::thread{ &FileAnalyzer::Analyze, &file_analyzer };
-
-			cond_var.wait(lock);
-
-			FileStatistic file_statistic = file_analyzer.get_file_statistic();
-			m_files_statistics.push_back(file_statistic);
-			m_total_files_statistic += file_statistic;
-
-			++m_total_files_processed;
-
-			if (m_project_filenames.empty()) break;
+			m_futures[i] = std::async(&FileAnalyzer::Analyze, m_file_analyzers[i]);
 		}
 
-		JoinThreads();
+		m_cond_var.notify_all();
+	}
+
+	for (std::size_t i = 0; i < m_futures.size(); ++i)
+	{
+		GetFileStatisticInFuture(i);
 	}
 }
 
-void ProjectAnalyzer::JoinThreads()
+void ProjectAnalyzer::GetFileStatisticInFuture(const std::size_t index)
 {
-	for (std::vector<std::thread>::iterator it = m_thread_pool.begin(); it != m_thread_pool.end(); ++it)
-	{
-		if (it->joinable()) it->join();
-	}
+		FileStatistic file_statistic = m_futures[index]._Get_value();
+		if (file_statistic.get_filename().empty())
+			return;
+
+		m_statistics_of_files.emplace_front(file_statistic);
+		m_total_files_statistic += file_statistic;
+		++m_total_files_processed;
 }
 
 std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyzer)
 {
-	os << "-------------------------" << std::endl;
-	os << project_analyzer.get_total_files_statistic();
-	os << "Total files     |  " << project_analyzer.m_total_files_processed << std::endl;
-	os << "-------------------------" << std::endl << std::endl;
+	os << "----------------------------------------" << std::endl;
+	os.imbue(std::locale(""));
+	FileStatistic file_statistic = project_analyzer.m_total_files_statistic;
+	os << "| Total blank lines     |  " << std::setw(10) << file_statistic.get_blank_lines_count() << "  |" << std::endl;
+	os << "| Total comment lines   |  " << std::setw(10) << file_statistic.get_comment_lines_count() << "  |" << std::endl;
+	os << "| Total code lines      |  " << std::setw(10) << file_statistic.get_code_lines_count() << "  |" << std::endl;
+	os << "| Total physical lines  |  " << std::setw(10) << file_statistic.get_physical_lines_count() << "  |" << std::endl;
+	os << "| Total files processed |  " << std::setw(10) << project_analyzer.m_total_files_processed << "  |" << std::endl;
+	os << "| Execution time (ms)   |  " << std::setw(10) << project_analyzer.m_timer << "  |" << std::endl;
+	os << "----------------------------------------" << std::endl;
 
-	std::vector<FileStatistic> file_statistic = project_analyzer.get_files_statistics();
-	for (std::size_t i = 0; i < file_statistic.size(); ++i)
+	std::forward_list<FileStatistic> statistics_of_files = project_analyzer.m_statistics_of_files;
+	for (const FileStatistic& file_statistic : statistics_of_files)
 	{
-		//os << "File: \"" << project_analyzer.m_project_filenames.front() << "\"" << std::endl;
-		os << file_statistic[i] << std::endl;
+		os << file_statistic << std::endl;
 	}
 
 	return os;
