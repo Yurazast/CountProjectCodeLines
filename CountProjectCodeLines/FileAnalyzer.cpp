@@ -1,34 +1,41 @@
 #include "FileAnalyzer.h"
 
-FileAnalyzer::FileAnalyzer(std::queue<std::string>& filenames_queue, std::mutex& mutex, std::condition_variable& cond_var)
+FileAnalyzer::FileAnalyzer(std::queue<std::string>& filenames_queue, std::mutex& mutex, std::condition_variable& cond_var, std::forward_list<FileStatistic>& statistics_of_files)
 		: m_filenames_queue(filenames_queue)
 		, m_mutex(mutex)
 		, m_cond_var(cond_var)
+		, m_statistics_of_files(statistics_of_files)
 {}
 
-FileStatistic FileAnalyzer::Analyze()
+void FileAnalyzer::Analyze()
 {
-	std::unique_lock<std::mutex> lock(m_mutex);
-
-	if (!m_cond_var.wait_for(lock, std::chrono::seconds(2), [this] { return !m_filenames_queue.empty(); }))
+	while (true)
 	{
-		return FileStatistic();
+		std::unique_lock<std::mutex> lock(m_mutex);
+
+		if (!m_cond_var.wait_for(lock, std::chrono::seconds(2), [this] { return !m_filenames_queue.empty(); }))
+		{
+			return;
+		}
+
+		std::string filename = m_filenames_queue.front();
+		m_filenames_queue.pop();
+
+		m_input_file.open(filename, std::ios::in);
+		if (!m_input_file.is_open())
+			throw std::runtime_error("Cannot open file: \"" + filename + "\"");
+
+		m_file_statistic = { filename };
+		lock.unlock();
+
+		CountLines();
+
+		lock.lock();
+		m_statistics_of_files.emplace_front(this->m_file_statistic);
+		lock.unlock();
+
+		m_input_file.close();
 	}
-
-	std::string filename = m_filenames_queue.front();
-	m_filenames_queue.pop();
-
-	m_input_file.open(filename, std::ios::in);
-	if (!m_input_file.is_open())
-		throw std::runtime_error("Cannot open file: \"" + filename + "\"");
-
-	m_file_statistic = { filename };
-	lock.unlock();
-
-	CountLines();
-
-	m_input_file.close();
-	return m_file_statistic;
 }
 
 FileStatistic FileAnalyzer::get_file_statistic() const

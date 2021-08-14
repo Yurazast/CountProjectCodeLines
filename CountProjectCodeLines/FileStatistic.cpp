@@ -79,12 +79,18 @@ FileStatistic& FileStatistic::operator+=(const FileStatistic& file_statistic)
 	return *this;
 }
 
+bool operator==(const FileStatistic& lhs, const FileStatistic& rhs)
+{
+	return std::tie(lhs.m_filename, lhs.m_blank_lines_count, lhs.m_comment_lines_count, lhs.m_code_lines_count, lhs.m_physical_lines_count)
+		== std::tie(rhs.m_filename, rhs.m_blank_lines_count, rhs.m_comment_lines_count, rhs.m_code_lines_count, rhs.m_physical_lines_count);
+}
+
 std::ostream& operator<<(std::ostream& os, const FileStatistic& file_statistic)
 {
 	os << "\nFile: \"" << file_statistic.m_filename << "\"" << std::endl;
 	os << "Blank lines     |  " << file_statistic.m_blank_lines_count << std::endl;
 	os << "Comment lines   |  " << file_statistic.m_comment_lines_count << std::endl;
 	os << "Code lines      |  " << file_statistic.m_code_lines_count << std::endl;
-	os << "Physical lines  |  " << file_statistic.m_physical_lines_count;
+	os << "Physical lines  |  " << file_statistic.m_physical_lines_count << std::endl;
 	return os;
 }

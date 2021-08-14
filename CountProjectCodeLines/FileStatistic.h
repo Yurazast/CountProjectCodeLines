@@ -6,7 +6,7 @@ class FileStatistic
 {
 public:
 	FileStatistic();
-	FileStatistic(const std::string& file_name);
+	FileStatistic(const std::string& filename);
 
 	void Reset();
 
@@ -23,6 +23,7 @@ public:
 	FileStatistic& operator+=(const FileStatistic& file_statistic);
 
 private:
+	friend bool operator==(const FileStatistic& lhs, const FileStatistic& rhs);
 	friend std::ostream& operator<<(std::ostream& os, const FileStatistic& file_statistic);	
 
 	std::string m_filename;

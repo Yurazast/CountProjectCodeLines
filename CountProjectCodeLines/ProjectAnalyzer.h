@@ -1,20 +1,13 @@
 #pragma once
 
-#include <string>
-#include <sstream>
-#include <fstream>
 #include <filesystem>
-#include <chrono>
-#include <queue>
 #include <vector>
-#include <forward_list>
 #include <memory>
-#include <mutex>
-#include <condition_variable>
-#include <future>
 
 #include "FileAnalyzer.h"
 #include "Timer.h"
+
+#define FIELD_WIDTH 10
 
 class ProjectAnalyzer
 {
@@ -23,23 +16,29 @@ public:
 	~ProjectAnalyzer();
 	
 	void Analyze();
+	void Reset();
 
+	std::string get_project_root_dir() const;
+	void set_project_root_dir(const std::string& project_root_dir);
 	std::forward_list<FileStatistic> get_statistics_of_files() const;
 	FileStatistic get_total_files_statistic() const;
 	std::size_t get_total_files_processed() const;
 
 private:
 	void SearchFiles();
-	void ProcessFiles();
-	void GetFileStatisticInFuture(const std::size_t index);
+	void CalculateTotalStatistic();
+	void CreateFileAnalyzers();
+	void DestroyFileAnalyzers();
+	void InitThreadPool();
+	void JoinThreads();
 
 	friend std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyzer);	
 
-	const std::string m_project_root_dir;
+	std::string m_project_root_dir;
 	std::queue<std::string> m_project_filenames;
 
-	std::vector<FileAnalyzer*> m_file_analyzers;
-	std::vector<std::future<FileStatistic>> m_futures;
+	std::vector<std::unique_ptr<FileAnalyzer>> m_file_analyzers;
+	std::vector<std::thread> m_thread_pool;
 
 	std::forward_list<FileStatistic> m_statistics_of_files;
 	FileStatistic m_total_files_statistic;

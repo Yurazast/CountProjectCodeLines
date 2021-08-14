@@ -7,8 +7,6 @@ const std::string ProjectAnalyzer::FILE_EXTENSION_NAMES[] {
 ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
 		: m_project_root_dir(project_root_dir)
 		, m_project_filenames{}
-		, m_file_analyzers(std::thread::hardware_concurrency())
-		, m_futures(std::thread::hardware_concurrency())
 		, m_statistics_of_files{}
 		, m_total_files_statistic()
 		, m_total_files_processed(0)
@@ -19,29 +17,51 @@ ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
 	if (!std::filesystem::exists(m_project_root_dir))
 		throw std::runtime_error("Directory \"" + project_root_dir + "\" doesn't exist");
 
-	for (std::size_t i = 0; i < m_futures.size(); ++i)
-	{
-		m_file_analyzers[i] = new FileAnalyzer(m_project_filenames, m_mutex, m_cond_var);
-	}
-
-	for (std::size_t i = 0; i < m_futures.size(); ++i)
-	{
-		m_futures[i] = std::async(&FileAnalyzer::Analyze, m_file_analyzers[i]);
-	}
+	CreateFileAnalyzers();
+	InitThreadPool();
 }
 
 ProjectAnalyzer::~ProjectAnalyzer()
 {
-	for (const FileAnalyzer* file_analyzer : m_file_analyzers)
-		delete file_analyzer;
+	JoinThreads();
+	DestroyFileAnalyzers();
 }
 
 void ProjectAnalyzer::Analyze()
 {
+	if (!m_thread_pool.empty())
+		Reset();
+
 	m_timer.Start();
 	SearchFiles();
-	ProcessFiles();
+	JoinThreads();
+	CalculateTotalStatistic();
 	m_timer.Stop();
+}
+
+void ProjectAnalyzer::Reset()
+{
+	m_project_filenames = std::queue<std::string>();
+	JoinThreads();
+	m_thread_pool.clear();
+	DestroyFileAnalyzers();
+	m_statistics_of_files.clear();
+	m_total_files_statistic.Reset();
+	m_total_files_processed = 0;
+	m_timer.Reset();
+	CreateFileAnalyzers();
+	InitThreadPool();
+}
+
+std::string ProjectAnalyzer::get_project_root_dir() const
+{
+	return m_project_root_dir;
+}
+
+void ProjectAnalyzer::set_project_root_dir(const std::string& project_root_dir)
+{
+	Reset();
+	this->m_project_root_dir = project_root_dir;
 }
 
 std::forward_list<FileStatistic> ProjectAnalyzer::get_statistics_of_files() const
@@ -82,35 +102,49 @@ void ProjectAnalyzer::SearchFiles()
 	}
 }
 
-void ProjectAnalyzer::ProcessFiles()
+void ProjectAnalyzer::CalculateTotalStatistic()
 {
-	while (!m_project_filenames.empty())
+	for (const FileStatistic& file_statistic : m_statistics_of_files)
 	{
-		for (std::size_t i = 0; i < m_futures.size(); ++i)
-		{
-			GetFileStatisticInFuture(i);
-
-			m_futures[i] = std::async(&FileAnalyzer::Analyze, m_file_analyzers[i]);
-		}
-
-		m_cond_var.notify_all();
-	}
-
-	for (std::size_t i = 0; i < m_futures.size(); ++i)
-	{
-		GetFileStatisticInFuture(i);
+		m_total_files_statistic += file_statistic;
+		++m_total_files_processed;
 	}
 }
 
-void ProjectAnalyzer::GetFileStatisticInFuture(const std::size_t index)
+void ProjectAnalyzer::CreateFileAnalyzers()
 {
-		FileStatistic file_statistic = m_futures[index]._Get_value();
-		if (file_statistic.get_filename().empty())
-			return;
+	m_file_analyzers = std::vector<std::unique_ptr<FileAnalyzer>>(std::thread::hardware_concurrency());
+	for (std::size_t i = 0; i < m_file_analyzers.size(); ++i)
+	{
+		m_file_analyzers[i] = std::make_unique<FileAnalyzer>(m_project_filenames, m_mutex, m_cond_var, m_statistics_of_files);
+	}
+}
 
-		m_statistics_of_files.emplace_front(file_statistic);
-		m_total_files_statistic += file_statistic;
-		++m_total_files_processed;
+void ProjectAnalyzer::DestroyFileAnalyzers()
+{
+	for (std::unique_ptr<FileAnalyzer>& file_analyzer : m_file_analyzers)
+	{
+		file_analyzer.reset();
+	}
+	m_file_analyzers.clear();
+}
+
+void ProjectAnalyzer::InitThreadPool()
+{
+	m_thread_pool = std::vector<std::thread>(std::thread::hardware_concurrency());
+	for (std::size_t i = 0; i < m_thread_pool.size(); ++i)
+	{
+		m_thread_pool[i] = std::thread{ &FileAnalyzer::Analyze, std::ref(*m_file_analyzers[i]) };
+	}
+}
+
+void ProjectAnalyzer::JoinThreads()
+{
+	for (std::vector<std::thread>::iterator it = m_thread_pool.begin(); it != m_thread_pool.end(); ++it)
+	{
+		if (it->joinable())
+			it->join();
+	}
 }
 
 std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyzer)
@@ -118,18 +152,18 @@ std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyz
 	os << "----------------------------------------" << std::endl;
 	os.imbue(std::locale(""));
 	FileStatistic file_statistic = project_analyzer.m_total_files_statistic;
-	os << "| Total blank lines     |  " << std::setw(10) << file_statistic.get_blank_lines_count() << "  |" << std::endl;
-	os << "| Total comment lines   |  " << std::setw(10) << file_statistic.get_comment_lines_count() << "  |" << std::endl;
-	os << "| Total code lines      |  " << std::setw(10) << file_statistic.get_code_lines_count() << "  |" << std::endl;
-	os << "| Total physical lines  |  " << std::setw(10) << file_statistic.get_physical_lines_count() << "  |" << std::endl;
-	os << "| Total files processed |  " << std::setw(10) << project_analyzer.m_total_files_processed << "  |" << std::endl;
-	os << "| Execution time (ms)   |  " << std::setw(10) << project_analyzer.m_timer << "  |" << std::endl;
+	os << "| Total blank lines     |  " << std::setw(FIELD_WIDTH) << file_statistic.get_blank_lines_count() << "  |" << std::endl;
+	os << "| Total comment lines   |  " << std::setw(FIELD_WIDTH) << file_statistic.get_comment_lines_count() << "  |" << std::endl;
+	os << "| Total code lines      |  " << std::setw(FIELD_WIDTH) << file_statistic.get_code_lines_count() << "  |" << std::endl;
+	os << "| Total physical lines  |  " << std::setw(FIELD_WIDTH) << file_statistic.get_physical_lines_count() << "  |" << std::endl;
+	os << "| Total files processed |  " << std::setw(FIELD_WIDTH) << project_analyzer.m_total_files_processed << "  |" << std::endl;
+	os << "| Execution time (ms)   |  " << std::setw(FIELD_WIDTH) << project_analyzer.m_timer << "  |" << std::endl;
 	os << "----------------------------------------" << std::endl;
 
 	std::forward_list<FileStatistic> statistics_of_files = project_analyzer.m_statistics_of_files;
 	for (const FileStatistic& file_statistic : statistics_of_files)
 	{
-		os << file_statistic << std::endl;
+		os << file_statistic;
 	}
 
 	return os;
