@@ -3,11 +3,12 @@
 #include <filesystem>
 #include <vector>
 #include <memory>
+#include <set>
 
 #include "FileAnalyzer.h"
 #include "Timer.h"
 
-#define FIELD_WIDTH 10
+#define FIELD_WIDTH 12
 
 class ProjectAnalyzer
 {
@@ -43,10 +44,11 @@ private:
 	std::forward_list<FileStatistic> m_statistics_of_files;
 	FileStatistic m_total_files_statistic;
 	std::size_t m_total_files_processed;
+	bool m_is_file_scanning_ended;
 
 	std::mutex m_mutex;
 	std::condition_variable m_cond_var;
 	Timer m_timer;
 
-	static const std::string FILE_EXTENSION_NAMES[];
+	static const std::set<std::string> FILE_EXTENSION_NAMES;
 };

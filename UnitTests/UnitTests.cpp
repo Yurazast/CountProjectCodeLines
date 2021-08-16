@@ -36,7 +36,8 @@ TEST(ProjectAnalyzerTest, ResetStatistic) {
 TEST(FileAnalyzerTest, AnalyzeEquality) {
 	std::queue<std::string> filenames;
 	std::forward_list<FileStatistic> statistics_of_files;
-	FileAnalyzer file_analyzer(filenames, std::mutex(), std::condition_variable(), statistics_of_files);
+	bool file_searching_ended = true;
+	FileAnalyzer file_analyzer(filenames, std::mutex(), std::condition_variable(), file_searching_ended, statistics_of_files);
 
 	filenames.push("ForTest.cpp");
 	file_analyzer.Analyze();
@@ -47,16 +48,17 @@ TEST(FileAnalyzerTest, AnalyzeEquality) {
 TEST(FileAnalyzerTest, FileAnalyze) {
 	std::queue<std::string> filenames;
 	std::forward_list<FileStatistic> statistics_of_files;
-	FileAnalyzer file_analyzer(filenames, std::mutex(), std::condition_variable(), statistics_of_files);
+	bool file_searching_ended = true;
+	FileAnalyzer file_analyzer(filenames, std::mutex(), std::condition_variable(), file_searching_ended, statistics_of_files);
 
 	filenames.push("ForTest.cpp");
 	file_analyzer.Analyze();
 
 	ASSERT_STREQ(file_analyzer.get_file_statistic().get_filename().c_str(), "ForTest.cpp");
 	ASSERT_EQ(file_analyzer.get_file_statistic().get_blank_lines_count(), 3);
-	ASSERT_EQ(file_analyzer.get_file_statistic().get_comment_lines_count(), 12);
-	ASSERT_EQ(file_analyzer.get_file_statistic().get_code_lines_count(), 4);
-	ASSERT_EQ(file_analyzer.get_file_statistic().get_physical_lines_count(), 17);
+	ASSERT_EQ(file_analyzer.get_file_statistic().get_comment_lines_count(), 15);
+	ASSERT_EQ(file_analyzer.get_file_statistic().get_code_lines_count(), 6);
+	ASSERT_EQ(file_analyzer.get_file_statistic().get_physical_lines_count(), 20);
 }
 
 TEST(FileStatisticTest, DefaultConstructor) {

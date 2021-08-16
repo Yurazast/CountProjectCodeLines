@@ -1,9 +1,12 @@
 #include "FileAnalyzer.h"
 
-FileAnalyzer::FileAnalyzer(std::queue<std::string>& filenames_queue, std::mutex& mutex, std::condition_variable& cond_var, std::forward_list<FileStatistic>& statistics_of_files)
+FileAnalyzer::FileAnalyzer(std::queue<std::string>& filenames_queue, std::mutex& mutex, std::condition_variable& cond_var,
+		bool& is_file_scanning_ended, std::forward_list<FileStatistic>& statistics_of_files)
 		: m_filenames_queue(filenames_queue)
+		, m_is_multiline_comment(false)
 		, m_mutex(mutex)
 		, m_cond_var(cond_var)
+		, m_is_file_scanning_ended(is_file_scanning_ended)
 		, m_statistics_of_files(statistics_of_files)
 {}
 
@@ -13,8 +16,11 @@ void FileAnalyzer::Analyze()
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 
-		if (!m_cond_var.wait_for(lock, std::chrono::seconds(2), [this] { return !m_filenames_queue.empty(); }))
+		m_cond_var.wait(lock, [this] { return !m_filenames_queue.empty() || m_is_file_scanning_ended; });
+
+		if (m_is_file_scanning_ended && m_filenames_queue.empty())
 		{
+			m_cond_var.notify_one();
 			return;
 		}
 
@@ -47,31 +53,63 @@ void FileAnalyzer::CountLines()
 {
 	std::string line;
 	std::size_t not_a_white_space_pos;
-	bool is_multi_line_comment = false;
 
 	while (std::getline(m_input_file, line))
 	{
 		if ((not_a_white_space_pos = line.find_first_not_of(" \t\r\n\f\v")) != std::string::npos)
 			line = line.substr(not_a_white_space_pos);
 
-		if (!is_multi_line_comment)
+		if (!m_is_multiline_comment)
 		{
 			if (not_a_white_space_pos == std::string::npos)
 				m_file_statistic.increment_blank_lines_count();
 
 			else if (line.find("//") != 0 && line.find("/*") != 0)
 				m_file_statistic.increment_code_lines_count();
+
+			if (line.find("//") != std::string::npos)
+				m_file_statistic.increment_comment_lines_count();
 		}
 
-		if (!is_multi_line_comment && line.find("/*") != std::string::npos)
-			is_multi_line_comment = true;
-
-		if (is_multi_line_comment || line.find("//") != std::string::npos)
-			m_file_statistic.increment_comment_lines_count();
-
-		if (is_multi_line_comment && line.find("*/") != std::string::npos)
-			is_multi_line_comment = false;
+		CheckIfMultilineComment(line);
 
 		m_file_statistic.increment_physical_lines_count();
+	}
+}
+
+void FileAnalyzer::CheckIfMultilineComment(const std::string& line)
+{
+	if (!m_is_multiline_comment && line.find("/*") != std::string::npos)
+		m_is_multiline_comment = true;
+
+	if (m_is_multiline_comment)
+		m_file_statistic.increment_comment_lines_count();
+
+	if (m_is_multiline_comment && line.find("*/") != std::string::npos)
+	{
+		m_is_multiline_comment = false;
+		CheckIfCodeAfterComment(line.substr(line.find("*/") + 2));
+	}
+}
+
+void FileAnalyzer::CheckIfCodeAfterComment(std::string&& line)
+{
+	std::size_t not_a_white_space_pos = line.find_first_not_of(" \t\r\n\f\v");
+
+	if (not_a_white_space_pos != std::string::npos)
+	{
+		line = line.substr(not_a_white_space_pos);
+
+		if (line.find("//") != 0 && line.find("/*") != 0)
+		{
+			m_file_statistic.increment_code_lines_count();
+			return;
+		}
+
+		if (line.find("/*") != std::string::npos)
+		{
+			m_is_multiline_comment = true;
+			CheckIfCodeAfterComment(line.substr(line.find("/*") + 2));
+		}
 	}
 }

@@ -14,4 +14,7 @@ some_code3 /* comment5
 
 */
  	some_code4
-/* comment6 */
+/* comment6 */ some_code5
+/* comment7 */	/* comment8 */ some_code6   /*
+comment9
+*/

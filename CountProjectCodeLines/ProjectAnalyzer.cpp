@@ -1,7 +1,7 @@
 #include "ProjectAnalyzer.h"
 
-const std::string ProjectAnalyzer::FILE_EXTENSION_NAMES[] {
-	".cpp", ".c", ".h", ".hpp"
+const std::set<std::string> ProjectAnalyzer::FILE_EXTENSION_NAMES {
+	".c", ".cpp", ".h", ".hpp"
 };
 
 ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
@@ -10,6 +10,7 @@ ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
 		, m_statistics_of_files{}
 		, m_total_files_statistic()
 		, m_total_files_processed(0)
+		, m_is_file_scanning_ended(false)
 		, m_mutex()
 		, m_cond_var()
 		, m_timer()
@@ -23,13 +24,14 @@ ProjectAnalyzer::ProjectAnalyzer(const std::string& project_root_dir)
 
 ProjectAnalyzer::~ProjectAnalyzer()
 {
+	m_is_file_scanning_ended = true;
 	JoinThreads();
 	DestroyFileAnalyzers();
 }
 
 void ProjectAnalyzer::Analyze()
 {
-	if (!m_thread_pool.empty())
+	if (m_is_file_scanning_ended)
 		Reset();
 
 	m_timer.Start();
@@ -41,14 +43,22 @@ void ProjectAnalyzer::Analyze()
 
 void ProjectAnalyzer::Reset()
 {
+	std::unique_lock<std::mutex> lock(m_mutex);
 	m_project_filenames = std::queue<std::string>();
+	m_is_file_scanning_ended = true;
+	lock.unlock();
+
+	m_cond_var.notify_one();
 	JoinThreads();
 	m_thread_pool.clear();
 	DestroyFileAnalyzers();
+
 	m_statistics_of_files.clear();
 	m_total_files_statistic.Reset();
 	m_total_files_processed = 0;
+	m_is_file_scanning_ended = false;
 	m_timer.Reset();
+
 	CreateFileAnalyzers();
 	InitThreadPool();
 }
@@ -85,21 +95,19 @@ void ProjectAnalyzer::SearchFiles()
 	{
 		if (dir_entry.is_regular_file())
 		{
-			const std::string file_ext = dir_entry.path().extension().string();
-			for (const std::string& ext_name : FILE_EXTENSION_NAMES)
+			if (FILE_EXTENSION_NAMES.find(dir_entry.path().extension().string()) != FILE_EXTENSION_NAMES.cend())
 			{
-				if (file_ext == ext_name)
-				{
-					std::unique_lock<std::mutex> lock(m_mutex);
-					m_project_filenames.emplace(dir_entry.path().string());
-					lock.unlock();
+				std::unique_lock<std::mutex> lock(m_mutex);
+				m_project_filenames.emplace(dir_entry.path().string());
+				lock.unlock();
 
-					m_cond_var.notify_one();
-					break;
-				}
+				m_cond_var.notify_one();
 			}
 		}
 	}
+
+	m_is_file_scanning_ended = true;
+	m_cond_var.notify_one();
 }
 
 void ProjectAnalyzer::CalculateTotalStatistic()
@@ -116,7 +124,7 @@ void ProjectAnalyzer::CreateFileAnalyzers()
 	m_file_analyzers = std::vector<std::unique_ptr<FileAnalyzer>>(std::thread::hardware_concurrency());
 	for (std::size_t i = 0; i < m_file_analyzers.size(); ++i)
 	{
-		m_file_analyzers[i] = std::make_unique<FileAnalyzer>(m_project_filenames, m_mutex, m_cond_var, m_statistics_of_files);
+		m_file_analyzers[i] = std::make_unique<FileAnalyzer>(m_project_filenames, m_mutex, m_cond_var, m_is_file_scanning_ended, m_statistics_of_files);
 	}
 }
 
@@ -149,7 +157,7 @@ void ProjectAnalyzer::JoinThreads()
 
 std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyzer)
 {
-	os << "----------------------------------------" << std::endl;
+	os << "------------------------------------------" << std::endl;
 	os.imbue(std::locale(""));
 	FileStatistic file_statistic = project_analyzer.m_total_files_statistic;
 	os << "| Total blank lines     |  " << std::setw(FIELD_WIDTH) << file_statistic.get_blank_lines_count() << "  |" << std::endl;
@@ -158,7 +166,7 @@ std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyz
 	os << "| Total physical lines  |  " << std::setw(FIELD_WIDTH) << file_statistic.get_physical_lines_count() << "  |" << std::endl;
 	os << "| Total files processed |  " << std::setw(FIELD_WIDTH) << project_analyzer.m_total_files_processed << "  |" << std::endl;
 	os << "| Execution time (ms)   |  " << std::setw(FIELD_WIDTH) << project_analyzer.m_timer << "  |" << std::endl;
-	os << "----------------------------------------" << std::endl;
+	os << "------------------------------------------" << std::endl;
 
 	std::forward_list<FileStatistic> statistics_of_files = project_analyzer.m_statistics_of_files;
 	for (const FileStatistic& file_statistic : statistics_of_files)

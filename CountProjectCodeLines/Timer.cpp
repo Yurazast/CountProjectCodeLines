@@ -24,7 +24,7 @@ std::ostream& operator<<(std::ostream& os, const Timer& m_timer)
 {
 	if (m_timer.m_start_time_point.time_since_epoch().count() == 0)
 	{
-		os << "Timer was not started" << std::endl;
+		os << "Not started!";
 		return os;
 	}
 
