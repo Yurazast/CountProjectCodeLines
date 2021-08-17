@@ -9,6 +9,7 @@
 #include "Timer.h"
 
 #define FIELD_WIDTH 12
+#define THREAD_POOL_SIZE std::thread::hardware_concurrency()
 
 class ProjectAnalyzer
 {

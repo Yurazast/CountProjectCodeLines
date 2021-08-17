@@ -8,6 +8,8 @@
 
 #include "FileStatistic.h"
 
+#define WHITESPACE " \t\r\n\f\v"
+
 class FileAnalyzer
 {
 public:

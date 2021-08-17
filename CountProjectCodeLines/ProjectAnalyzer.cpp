@@ -121,7 +121,7 @@ void ProjectAnalyzer::CalculateTotalStatistic()
 
 void ProjectAnalyzer::CreateFileAnalyzers()
 {
-	m_file_analyzers = std::vector<std::unique_ptr<FileAnalyzer>>(std::thread::hardware_concurrency());
+	m_file_analyzers = std::vector<std::unique_ptr<FileAnalyzer>>(THREAD_POOL_SIZE);
 	for (std::size_t i = 0; i < m_file_analyzers.size(); ++i)
 	{
 		m_file_analyzers[i] = std::make_unique<FileAnalyzer>(m_project_filenames, m_mutex, m_cond_var, m_is_file_scanning_ended, m_statistics_of_files);
@@ -139,7 +139,7 @@ void ProjectAnalyzer::DestroyFileAnalyzers()
 
 void ProjectAnalyzer::InitThreadPool()
 {
-	m_thread_pool = std::vector<std::thread>(std::thread::hardware_concurrency());
+	m_thread_pool = std::vector<std::thread>(THREAD_POOL_SIZE);
 	for (std::size_t i = 0; i < m_thread_pool.size(); ++i)
 	{
 		m_thread_pool[i] = std::thread{ &FileAnalyzer::Analyze, std::ref(*m_file_analyzers[i]) };
@@ -159,7 +159,7 @@ std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyz
 {
 	os << "------------------------------------------" << std::endl;
 	os.imbue(std::locale(""));
-	FileStatistic file_statistic = project_analyzer.m_total_files_statistic;
+	const FileStatistic file_statistic = project_analyzer.m_total_files_statistic;
 	os << "| Total blank lines     |  " << std::setw(FIELD_WIDTH) << file_statistic.get_blank_lines_count() << "  |" << std::endl;
 	os << "| Total comment lines   |  " << std::setw(FIELD_WIDTH) << file_statistic.get_comment_lines_count() << "  |" << std::endl;
 	os << "| Total code lines      |  " << std::setw(FIELD_WIDTH) << file_statistic.get_code_lines_count() << "  |" << std::endl;
@@ -168,7 +168,7 @@ std::ostream& operator<<(std::ostream& os, const ProjectAnalyzer& project_analyz
 	os << "| Execution time (ms)   |  " << std::setw(FIELD_WIDTH) << project_analyzer.m_timer << "  |" << std::endl;
 	os << "------------------------------------------" << std::endl;
 
-	std::forward_list<FileStatistic> statistics_of_files = project_analyzer.m_statistics_of_files;
+	const std::forward_list<FileStatistic> statistics_of_files = project_analyzer.m_statistics_of_files;
 	for (const FileStatistic& file_statistic : statistics_of_files)
 	{
 		os << file_statistic;

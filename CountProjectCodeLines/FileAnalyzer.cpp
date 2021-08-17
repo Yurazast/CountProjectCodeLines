@@ -24,7 +24,7 @@ void FileAnalyzer::Analyze()
 			return;
 		}
 
-		std::string filename = m_filenames_queue.front();
+		const std::string filename = m_filenames_queue.front();
 		m_filenames_queue.pop();
 
 		m_input_file.open(filename, std::ios::in);
@@ -52,16 +52,16 @@ FileStatistic FileAnalyzer::get_file_statistic() const
 void FileAnalyzer::CountLines()
 {
 	std::string line;
-	std::size_t not_a_white_space_pos;
+	std::size_t not_a_whitespace_pos;
 
 	while (std::getline(m_input_file, line))
 	{
-		if ((not_a_white_space_pos = line.find_first_not_of(" \t\r\n\f\v")) != std::string::npos)
-			line = line.substr(not_a_white_space_pos);
+		if ((not_a_whitespace_pos = line.find_first_not_of(WHITESPACE)) != std::string::npos)
+			line = line.substr(not_a_whitespace_pos);
 
 		if (!m_is_multiline_comment)
 		{
-			if (not_a_white_space_pos == std::string::npos)
+			if (not_a_whitespace_pos == std::string::npos)
 				m_file_statistic.increment_blank_lines_count();
 
 			else if (line.find("//") != 0 && line.find("/*") != 0)
@@ -94,22 +94,49 @@ void FileAnalyzer::CheckIfMultilineComment(const std::string& line)
 
 void FileAnalyzer::CheckIfCodeAfterComment(std::string&& line)
 {
-	std::size_t not_a_white_space_pos = line.find_first_not_of(" \t\r\n\f\v");
+	std::size_t not_a_whitespace_pos = line.find_first_not_of(WHITESPACE);
+	bool is_code_line = false;
 
-	if (not_a_white_space_pos != std::string::npos)
+	while (not_a_whitespace_pos != std::string::npos)
 	{
-		line = line.substr(not_a_white_space_pos);
+		line = line.substr(not_a_whitespace_pos);
 
-		if (line.find("//") != 0 && line.find("/*") != 0)
-		{
-			m_file_statistic.increment_code_lines_count();
+		if (line.find("//") == 0)
 			return;
-		}
 
-		if (line.find("/*") != std::string::npos)
+		if (line.find("/*") == 0)
 		{
 			m_is_multiline_comment = true;
-			CheckIfCodeAfterComment(line.substr(line.find("/*") + 2));
+
+			const std::size_t end_multiline_comment_pos = line.find("*/");
+			if (end_multiline_comment_pos != std::string::npos)
+			{
+				m_is_multiline_comment = false;
+				line = line.substr(end_multiline_comment_pos + 2);
+			}
+			else
+			{
+				break;
+			}
 		}
+		else
+		{
+			is_code_line = true;
+
+			const std::size_t whitespace_pos = line.find_first_of(WHITESPACE);
+			if (whitespace_pos != std::string::npos)
+			{
+				line = line.substr(whitespace_pos);
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		not_a_whitespace_pos = line.find_first_not_of(WHITESPACE);
 	}
+
+	if (is_code_line)
+		m_file_statistic.increment_code_lines_count();
 }
