@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="ProjectAnalyzer">
+      <UniqueIdentifier>{768c7839-8dde-41ae-bcb6-a55a10e62f5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Timer">
+      <UniqueIdentifier>{b1626509-fe38-46f0-821f-c5dddef325bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileAnalyzer">
+      <UniqueIdentifier>{403e752f-73ae-4699-b3f5-e8e2eefb0f01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileStatistic">
+      <UniqueIdentifier>{ccd20cd6-36b4-417e-9a45-5c4dbac4b4e2}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Timer.h">
+      <Filter>Timer</Filter>
+    </ClInclude>
+    <ClInclude Include="FileStatistic.h">
+      <Filter>FileStatistic</Filter>
+    </ClInclude>
+    <ClInclude Include="FileAnalyzer.h">
+      <Filter>FileAnalyzer</Filter>
+    </ClInclude>
+    <ClInclude Include="ProjectAnalyzer.h">
+      <Filter>ProjectAnalyzer</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Timer.cpp">
+      <Filter>Timer</Filter>
+    </ClCompile>
+    <ClCompile Include="FileStatistic.cpp">
+      <Filter>FileStatistic</Filter>
+    </ClCompile>
+    <ClCompile Include="FileAnalyzer.cpp">
+      <Filter>FileAnalyzer</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjectAnalyzer.cpp">
+      <Filter>ProjectAnalyzer</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
